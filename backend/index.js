@@ -65,6 +65,118 @@ app.get("/sales-expenses", (req, res) => {
     });
 });
 
+app.post("/sales-expenses", (req, res) => {
+    const { year, sales, expenses } = req.body;
+
+    // validate data
+    if (!year || !sales || !expenses) {
+        return res
+            .status(400)
+            .json({ error: "Year, sales, and expenses are required fields." });
+    }
+
+    // prepare query
+    const insertQuery =
+        "INSERT INTO sales_expenses (year, sales, expenses) VALUES (?, ?, ?)";
+    const values = [year, sales, expenses];
+
+    // execute query
+    db.query(insertQuery, values, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res
+                .status(500)
+                .json({ error: "Something went wrong while inserting data." });
+        }
+
+        // Data successfully inserted
+        return res.status(201).json({ message: "Data inserted successfully." });
+    });
+    console.log(req.body);
+});
+
+// update data
+app.patch("/sales-expenses/:year", (req, res) => {
+    const itemId = req.params.year;
+    const { year, sales, expenses } = req.body;
+
+    if (!year && !sales && !expenses) {
+        return res.status(400).json({
+            error: "At least one field (year, sales, or expenses) is required for the update.",
+        });
+    }
+
+    // Build the partial update query based on provided fields
+    let updateQuery = "UPDATE sales_expenses SET";
+    const values = [];
+
+    if (year) {
+        updateQuery += " year = ?,";
+        values.push(year);
+    }
+
+    if (sales) {
+        updateQuery += " sales = ?,";
+        values.push(sales);
+    }
+
+    if (expenses) {
+        updateQuery += " expenses = ?,";
+        values.push(expenses);
+    }
+
+    // Remove the trailing comma
+    updateQuery = updateQuery.slice(0, -1);
+
+    updateQuery += " WHERE year = ?";
+    values.push(itemId); // Include the ID in the values array
+
+    db.query(updateQuery, values, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res
+                .status(500)
+                .json({ error: "Something went wrong while updating data." });
+        }
+
+        if (results.affectedRows === 0) {
+            return res.status(404).json({ error: "Item not found." });
+        }
+
+        // Data successfully updated
+        return res.status(200).json({ message: "Data updated successfully." });
+    });
+});
+
+// delete data by year
+app.delete("/sales-expenses/:year", (req, res) => {
+    const targetYear = req.params.year;
+
+    if (!targetYear) {
+        return res.status(400).json({ error: "Year parameter is required." });
+    }
+
+    const deleteQuery = "DELETE FROM sales_expenses WHERE year = ?";
+    const values = [targetYear];
+
+    db.query(deleteQuery, values, (err, results) => {
+        if (err) {
+            console.error(err);
+            return res
+                .status(500)
+                .json({ error: "Something went wrong while deleting data." });
+        }
+
+        if (results.affectedRows === 0) {
+            return res
+                .status(404)
+                .json({ error: "No data found for the specified year." });
+        }
+        // Respond with a 204 No Content status
+        return res.status(204).end();
+    });
+});
+
 const fetchUpdatedDataFromDB = () => {
     return new Promise((resolve, reject) => {
         db.query("SELECT * FROM sales_expenses", (err, results) => {
@@ -105,7 +217,7 @@ io.on("connection", (socket) => {
 
     emitUpdatedData();
 
-    const interval = setInterval(emitUpdatedData, 5000);
+    const interval = setInterval(emitUpdatedData, 2000);
 
     // Handle client disconnection
     socket.on("disconnect", () => {
